@@ -56,6 +56,10 @@ type Index interface {
 	Delete()
 
 	cPtr() *C.FaissIndex
+
+	Reconstruct(id int64) ([]float32, error)
+
+	ReconstructN(id int64, n int) ([][]float32, error)
 }
 
 type faissIndex struct {
@@ -109,6 +113,38 @@ func (idx *faissIndex) AddWithIDs(x []float32, xids []int64) error {
 		return getLastError()
 	}
 	return nil
+}
+
+func (idx *faissIndex) Reconstruct(id int64) (recons []float32, err error) {
+	rv := make([]float32, idx.D())
+	if c := C.faiss_Index_reconstruct(
+		idx.idx,
+		C.idx_t(id),
+		(*C.float)(&rv[0]),
+	); c != 0 {
+		err = getLastError()
+	}
+
+	return rv, err
+}
+
+func (idx *faissIndex) ReconstructN(id int64, n int) (recons [][]float32, err error) {
+	rv := make([]float32, idx.D()*n)
+	if c := C.faiss_Index_reconstruct_n(
+		idx.idx,
+		C.idx_t(id),
+		C.idx_t(n),
+		(*C.float)(&rv[0]),
+	); c != 0 {
+		err = getLastError()
+	}
+
+	result := make([][]float32, n)
+	for i := 0; i < n; i++ {
+		start := i * idx.D()
+		result[i] = rv[start : start+idx.D()]
+	}
+	return result, nil
 }
 
 func (idx *faissIndex) Search(x []float32, k int64) (
